@@ -8,8 +8,9 @@ import {
   Pressable,
   SafeAreaView,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
-import { COLORS, SPACING, FONT_SIZES, READING_LEVELS, SUPPORTED_LANGUAGES } from '@/constants';
+import { COLORS, SPACING, FONT_SIZES, READING_LEVELS, SUPPORTED_LANGUAGES, type LanguageCode } from '@/constants';
 import { useReadingProfile } from '@/hooks/useReadingProfile';
 import { getProfileStats } from '@/lib/db';
 
@@ -23,6 +24,7 @@ interface Stats {
 export default function ProfileScreen() {
   const { profile, update } = useReadingProfile();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [showLangModal, setShowLangModal] = useState(false);
 
   useEffect(() => {
     getProfileStats()
@@ -122,12 +124,18 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <View style={styles.settingRow}>
+          <Pressable
+            style={styles.settingRow}
+            onPress={() => setShowLangModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Target language: ${currentLang?.label ?? profile.targetLanguage}. Tap to change.`}
+          >
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>Target language</Text>
               <Text style={styles.settingValue}>{currentLang?.label ?? profile.targetLanguage}</Text>
             </View>
-          </View>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
 
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
@@ -179,6 +187,47 @@ export default function ProfileScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showLangModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLangModal(false)}
+        accessibilityViewIsModal
+      >
+        <Pressable style={modalStyles.backdrop} onPress={() => setShowLangModal(false)}>
+          <View style={modalStyles.sheet}>
+            <View style={modalStyles.handle} />
+            <Text style={modalStyles.title}>Target language</Text>
+            <ScrollView style={modalStyles.list} keyboardShouldPersistTaps="handled">
+              {SUPPORTED_LANGUAGES.map((lang) => {
+                const selected = lang.code === profile.targetLanguage;
+                return (
+                  <Pressable
+                    key={lang.code}
+                    style={[modalStyles.row, selected && modalStyles.rowSelected]}
+                    onPress={() => {
+                      update({ targetLanguage: lang.code as LanguageCode });
+                      setShowLangModal(false);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${lang.label} — ${lang.nativeLabel}`}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <View style={modalStyles.rowText}>
+                      <Text style={[modalStyles.label, selected && modalStyles.labelActive]}>
+                        {lang.label}
+                      </Text>
+                      <Text style={modalStyles.native}>{lang.nativeLabel}</Text>
+                    </View>
+                    {selected && <Text style={modalStyles.check}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -200,6 +249,41 @@ function StatCard({
     </View>
   );
 }
+
+const modalStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: SPACING.lg,
+    maxHeight: '65%',
+    gap: SPACING.md,
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: COLORS.border,
+    alignSelf: 'center',
+    marginBottom: SPACING.sm,
+  },
+  title: { color: COLORS.text, fontSize: FONT_SIZES.lg, fontWeight: '800' },
+  list: { maxHeight: 400 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 10,
+    marginBottom: 2,
+    minHeight: 44,
+  },
+  rowSelected: { backgroundColor: COLORS.primaryDim + '40' },
+  rowText: { flex: 1 },
+  label: { color: COLORS.textMuted, fontSize: FONT_SIZES.md, fontWeight: '500' },
+  labelActive: { color: COLORS.text, fontWeight: '700' },
+  native: { color: COLORS.textDim, fontSize: FONT_SIZES.sm, marginTop: 2 },
+  check: { color: COLORS.primary, fontSize: 18, fontWeight: '700' },
+});
 
 const statStyles = StyleSheet.create({
   card: {
@@ -339,6 +423,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 24,
     textAlign: 'center',
+  },
+  chevron: {
+    color: COLORS.textMuted,
+    fontSize: 22,
   },
   privacyNote: {
     flexDirection: 'row',

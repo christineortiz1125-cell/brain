@@ -13,7 +13,15 @@ import {
 import { useRouter } from 'expo-router';
 import { TextDisplay } from '@/components/TextDisplay';
 import { AudioControls } from '@/components/AudioControls';
-import { COLORS, SPACING, FONT_SIZES, MODE_META, READING_LEVELS } from '@/constants';
+import {
+  COLORS,
+  SPACING,
+  FONT_SIZES,
+  MODE_META,
+  READING_LEVELS,
+  SUPPORTED_LANGUAGES,
+  type LanguageCode,
+} from '@/constants';
 import { useAppStore } from '@/store';
 import { useTTS } from '@/hooks/useTTS';
 import { streamClaudeResponse } from '@/lib/claude';
@@ -33,12 +41,20 @@ export default function OutputScreen() {
   const clearSession = useAppStore((s) => s.clearSession);
 
   const profile = useAppStore((s) => s.profile);
-  const { isSpeaking, play, stop, toggle } = useTTS();
+  const { isSpeaking, play, stop } = useTTS();
 
   const [fontSize, setFontSize] = useState(profile.fontSize);
+
+  // Simplify: per-session reading level
   const [activeLevel, setActiveLevel] = useState(profile.readingLevel);
   const activeLevelRef = useRef(activeLevel);
 
+  // Translate: per-session target language
+  const [activeLanguage, setActiveLanguage] = useState<LanguageCode>(profile.targetLanguage);
+  const activeLanguageRef = useRef(activeLanguage);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+
+  // Define word modal
   const [defineWord, setDefineWord] = useState<string | null>(null);
   const [defineResult, setDefineResult] = useState<string>('');
   const [definingWord, setDefiningWord] = useState(false);
@@ -46,7 +62,7 @@ export default function OutputScreen() {
   const modeMeta = MODE_META[activeMode];
 
   const runProcessing = useCallback(
-    async (levelOverride?: number) => {
+    async (levelOverride?: number, languageOverride?: LanguageCode) => {
       if (!capturedText.trim()) return;
 
       abortRef.current?.abort();
@@ -55,26 +71,21 @@ export default function OutputScreen() {
       setIsProcessing(true);
       setProcessedText('');
 
-      if (activeMode === 'read') {
-        setProcessedText(capturedText);
-        setIsProcessing(false);
-        return;
-      }
-
       const level = levelOverride ?? activeLevelRef.current;
+      const language = languageOverride ?? activeLanguageRef.current;
 
       await streamClaudeResponse({
         mode: activeMode,
         text: capturedText,
         readingLevel: level,
-        targetLanguage: profile.targetLanguage,
+        targetLanguage: language,
         signal: abortRef.current.signal,
         onChunk: (chunk) => {
           appendChunk(chunk);
         },
         onDone: async (fullText) => {
           setIsProcessing(false);
-          if (activeMode === 'simplify') {
+          if (activeMode === 'read' || activeMode === 'simplify') {
             play(fullText);
           }
           const wordCount = fullText.trim().split(/\s+/).length;
@@ -93,7 +104,7 @@ export default function OutputScreen() {
         },
       });
     },
-    [capturedText, activeMode, profile.targetLanguage, setIsProcessing, setProcessedText, appendChunk, play]
+    [capturedText, activeMode, setIsProcessing, setProcessedText, appendChunk, play]
   );
 
   useEffect(() => {
@@ -109,9 +120,20 @@ export default function OutputScreen() {
       activeLevelRef.current = level;
       setActiveLevel(level);
       stop();
-      runProcessing(level);
+      runProcessing(level, undefined);
     },
     [isProcessing, runProcessing, stop]
+  );
+
+  const handleLanguageChange = useCallback(
+    (lang: LanguageCode) => {
+      activeLanguageRef.current = lang;
+      setActiveLanguage(lang);
+      setShowLangPicker(false);
+      stop();
+      runProcessing(undefined, lang);
+    },
+    [runProcessing, stop]
   );
 
   const handleWordPress = useCallback(
@@ -127,7 +149,7 @@ export default function OutputScreen() {
         text: capturedText,
         word,
         readingLevel: activeLevelRef.current,
-        targetLanguage: profile.targetLanguage,
+        targetLanguage: activeLanguageRef.current,
         signal: abort.signal,
         onChunk: (chunk) => setDefineResult((prev) => prev + chunk),
         onDone: async (fullText) => {
@@ -137,7 +159,7 @@ export default function OutputScreen() {
         onError: () => setDefiningWord(false),
       });
     },
-    [activeMode, capturedText, profile.targetLanguage]
+    [activeMode, capturedText]
   );
 
   const handleBack = () => {
@@ -147,13 +169,18 @@ export default function OutputScreen() {
     router.back();
   };
 
-  const outputText = processedText || capturedText;
-  const displayText = activeMode === 'read' ? capturedText : outputText;
+  const displayText = processedText || capturedText;
 
   const loadingLabel =
     activeMode === 'simplify'
       ? `Simplifying at Level ${activeLevel}…`
-      : 'Processing with Claude…';
+      : activeMode === 'translate'
+      ? `Translating to ${SUPPORTED_LANGUAGES.find((l) => l.code === activeLanguage)?.label ?? activeLanguage}…`
+      : activeMode === 'read'
+      ? 'Cleaning text…'
+      : 'Processing…';
+
+  const currentLang = SUPPORTED_LANGUAGES.find((l) => l.code === activeLanguage);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -192,9 +219,10 @@ export default function OutputScreen() {
         </View>
       </View>
 
+      {/* Simplify: inline reading level picker */}
       {activeMode === 'simplify' && (
-        <View style={styles.levelBar}>
-          <Text style={styles.levelBarLabel}>Reading level</Text>
+        <View style={styles.controlBar}>
+          <Text style={styles.controlBarLabel}>Reading level</Text>
           <View style={styles.levelPills}>
             {READING_LEVELS.map((lvl) => {
               const active = lvl.value === activeLevel;
@@ -220,7 +248,24 @@ export default function OutputScreen() {
         </View>
       )}
 
-      {isProcessing && !displayText && (
+      {/* Translate: inline language picker trigger */}
+      {activeMode === 'translate' && (
+        <View style={styles.controlBar}>
+          <Text style={styles.controlBarLabel}>Translating to</Text>
+          <Pressable
+            style={styles.langTrigger}
+            onPress={() => setShowLangPicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Change language, currently ${currentLang?.label}`}
+          >
+            <Text style={styles.langTriggerText}>{currentLang?.label ?? activeLanguage}</Text>
+            <Text style={styles.langTriggerNative}>{currentLang?.nativeLabel}</Text>
+            <Text style={styles.langChevron}>›</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {isProcessing && !processedText && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator color={COLORS.accent} size="large" />
           <Text style={styles.loadingText}>{loadingLabel}</Text>
@@ -251,9 +296,7 @@ export default function OutputScreen() {
           disabled={!displayText || isProcessing}
           onPlay={() => play(displayText)}
           onStop={stop}
-          onReplay={() => {
-            stop().then(() => play(displayText));
-          }}
+          onReplay={() => stop().then(() => play(displayText))}
         />
         <Pressable
           style={styles.retryBtn}
@@ -266,6 +309,46 @@ export default function OutputScreen() {
         </Pressable>
       </View>
 
+      {/* Language picker modal (translate mode) */}
+      <Modal
+        visible={showLangPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLangPicker(false)}
+        accessibilityViewIsModal
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShowLangPicker(false)}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalSheetTitle}>Translate to</Text>
+            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
+              {SUPPORTED_LANGUAGES.map((lang) => {
+                const selected = lang.code === activeLanguage;
+                return (
+                  <Pressable
+                    key={lang.code}
+                    style={[styles.langRow, selected && styles.langRowSelected]}
+                    onPress={() => handleLanguageChange(lang.code as LanguageCode)}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${lang.label} — ${lang.nativeLabel}`}
+                    accessibilityState={{ checked: selected }}
+                  >
+                    <View style={styles.langRowText}>
+                      <Text style={[styles.langRowLabel, selected && styles.langRowLabelActive]}>
+                        {lang.label}
+                      </Text>
+                      <Text style={styles.langRowNative}>{lang.nativeLabel}</Text>
+                    </View>
+                    {selected && <Text style={styles.langCheck}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Define word modal */}
       <Modal
         visible={defineWord !== null}
         transparent
@@ -303,10 +386,7 @@ export default function OutputScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-  },
+  safe: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -316,16 +396,8 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     gap: SPACING.sm,
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    color: COLORS.text,
-    fontSize: 22,
-  },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  backIcon: { color: COLORS.text, fontSize: 22 },
   modePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,14 +408,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modeIcon: { fontSize: 14 },
-  modeLabel: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '700',
-  },
-  fontControls: {
-    flexDirection: 'row',
-    gap: 4,
-  },
+  modeLabel: { fontSize: FONT_SIZES.sm, fontWeight: '700' },
+  fontControls: { flexDirection: 'row', gap: 4 },
   fontBtn: {
     width: 44,
     height: 44,
@@ -354,29 +420,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  fontBtnText: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.sm,
-    fontWeight: '700',
-  },
-  levelBar: {
+  fontBtnText: { color: COLORS.text, fontSize: FONT_SIZES.sm, fontWeight: '700' },
+  controlBar: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     gap: SPACING.xs,
   },
-  levelBarLabel: {
+  controlBarLabel: {
     color: COLORS.textMuted,
     fontSize: FONT_SIZES.xs,
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  levelPills: {
-    flexDirection: 'row',
-    gap: SPACING.xs,
-  },
+  // Level pills (simplify)
+  levelPills: { flexDirection: 'row', gap: SPACING.xs },
   levelPill: {
     flex: 1,
     alignItems: 'center',
@@ -389,18 +449,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  levelPillActive: {
-    backgroundColor: COLORS.accentDim,
-    borderColor: COLORS.accent,
-  },
-  levelPillNum: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.md,
-    fontWeight: '800',
-  },
-  levelPillNumActive: {
-    color: COLORS.accent,
-  },
+  levelPillActive: { backgroundColor: COLORS.accentDim, borderColor: COLORS.accent },
+  levelPillNum: { color: COLORS.textMuted, fontSize: FONT_SIZES.md, fontWeight: '800' },
+  levelPillNumActive: { color: COLORS.accent },
   levelPillName: {
     color: COLORS.textDim,
     fontSize: 9,
@@ -408,18 +459,26 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  levelPillNameActive: {
-    color: COLORS.accent,
-  },
-  loadingContainer: {
+  levelPillNameActive: { color: COLORS.accent },
+  // Language trigger (translate)
+  langTrigger: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: SPACING.xl,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     gap: SPACING.sm,
+    alignSelf: 'flex-start',
+    minHeight: 44,
   },
-  loadingText: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.md,
-  },
+  langTriggerText: { color: COLORS.text, fontSize: FONT_SIZES.md, fontWeight: '700' },
+  langTriggerNative: { color: COLORS.textMuted, fontSize: FONT_SIZES.sm, flex: 1 },
+  langChevron: { color: COLORS.textMuted, fontSize: 20 },
+  loadingContainer: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.sm },
+  loadingText: { color: COLORS.textMuted, fontSize: FONT_SIZES.md },
   footer: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.md,
@@ -427,37 +486,18 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     gap: SPACING.sm,
   },
-  streamingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
-  streamingBadge: {
-    color: COLORS.accent,
-    fontSize: FONT_SIZES.xs,
-    fontWeight: '600',
-  },
-  retryBtn: {
-    alignSelf: 'flex-start',
-  },
-  retryLabel: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.sm,
-  },
-  retryDisabled: {
-    opacity: 0.3,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
+  streamingRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
+  streamingBadge: { color: COLORS.accent, fontSize: FONT_SIZES.xs, fontWeight: '600' },
+  retryBtn: { alignSelf: 'flex-start' },
+  retryLabel: { color: COLORS.textMuted, fontSize: FONT_SIZES.sm },
+  retryDisabled: { opacity: 0.3 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
   modalSheet: {
     backgroundColor: COLORS.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: SPACING.lg,
-    maxHeight: '60%',
+    maxHeight: '65%',
     gap: SPACING.md,
   },
   modalHandle: {
@@ -468,29 +508,21 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: SPACING.sm,
   },
+  modalSheetTitle: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: '800',
+  },
   modalWord: {
     color: COLORS.text,
     fontSize: FONT_SIZES.xl,
     fontWeight: '800',
     textTransform: 'capitalize',
   },
-  modalLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  modalLoadingText: {
-    color: COLORS.textMuted,
-    fontSize: FONT_SIZES.md,
-  },
-  modalScroll: {
-    maxHeight: 200,
-  },
-  modalDefinition: {
-    color: COLORS.text,
-    fontSize: FONT_SIZES.md,
-    lineHeight: 26,
-  },
+  modalLoading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  modalLoadingText: { color: COLORS.textMuted, fontSize: FONT_SIZES.md },
+  modalScroll: { maxHeight: 300 },
+  modalDefinition: { color: COLORS.text, fontSize: FONT_SIZES.md, lineHeight: 26 },
   modalCloseBtn: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
@@ -498,9 +530,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minHeight: 44,
   },
-  modalCloseBtnLabel: {
-    color: COLORS.white,
-    fontSize: FONT_SIZES.md,
-    fontWeight: '700',
+  modalCloseBtnLabel: { color: COLORS.white, fontSize: FONT_SIZES.md, fontWeight: '700' },
+  // Language rows in modal
+  langRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: 10,
+    marginBottom: 2,
+    minHeight: 44,
   },
+  langRowSelected: { backgroundColor: COLORS.primaryDim + '40' },
+  langRowText: { flex: 1 },
+  langRowLabel: { color: COLORS.textMuted, fontSize: FONT_SIZES.md, fontWeight: '500' },
+  langRowLabelActive: { color: COLORS.text, fontWeight: '700' },
+  langRowNative: { color: COLORS.textDim, fontSize: FONT_SIZES.sm, marginTop: 2 },
+  langCheck: { color: COLORS.primary, fontSize: 18, fontWeight: '700' },
 });
