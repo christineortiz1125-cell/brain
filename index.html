@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brain — Read the world</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080808;
+      --surface: #111111;
+      --border: #1f1f1f;
+      --accent: #6ee7b7;
+      --accent-dim: #34d39933;
+      --text: #f0f0f0;
+      --muted: #888;
+      --card-bg: #0e0e0e;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.1rem 3rem;
+      background: rgba(8,8,8,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .nav-logo span { color: var(--accent); }
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 2.2rem;
+    }
+    nav ul a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+    nav ul a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent);
+      color: #000 !important;
+      padding: 0.45rem 1.1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem !important;
+      transition: opacity 0.2s !important;
+    }
+    .nav-cta:hover { opacity: 0.85; color: #000 !important; }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8rem 2rem 5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(110,231,183,0.07) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -55%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--accent-dim);
+      border: 1px solid rgba(110,231,183,0.25);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.35rem 0.9rem;
+      border-radius: 100px;
+      margin-bottom: 1.8rem;
+    }
+    .hero-eyebrow::before {
+      content: "";
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      display: inline-block;
+    }
+    h1 {
+      font-size: clamp(3rem, 8vw, 6rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 1.4rem;
+      background: linear-gradient(160deg, #fff 40%, #6ee7b7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 540px;
+      margin: 0 auto 2.8rem;
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 0.8rem 1.8rem;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: opacity 0.2s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.95rem;
+      padding: 0.8rem 1.8rem;
+      border-radius: 8px;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s, transform 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-secondary:hover { border-color: #444; transform: translateY(-1px); }
+
+    /* GLASSES MOCKUP */
+    .glasses-wrap {
+      margin-top: 4.5rem;
+      position: relative;
+    }
+    .glasses-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2.5rem 3rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 2rem;
+      max-width: 560px;
+      text-align: left;
+      position: relative;
+    }
+    .glasses-icon {
+      font-size: 3.5rem;
+      flex-shrink: 0;
+    }
+    .glasses-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.3rem;
+    }
+    .glasses-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+    .glasses-desc { font-size: 0.88rem; color: var(--muted); }
+    .pulse-dot {
+      position: absolute;
+      top: 1rem; right: 1rem;
+      width: 9px; height: 9px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(110,231,183,0.5); }
+      50% { box-shadow: 0 0 0 6px rgba(110,231,183,0); }
+    }
+
+    /* SECTION SHARED */
+    section { padding: 6rem 2rem; }
+    .section-inner { max-width: 1060px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.8rem;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+    }
+    .section-sub {
+      font-size: 1.05rem;
+      color: var(--muted);
+      max-width: 520px;
+      line-height: 1.7;
+      margin-bottom: 3.5rem;
+    }
+
+    /* MODES */
+    #modes { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.2rem;
+    }
+    .mode-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.8rem;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .mode-card:hover { border-color: rgba(110,231,183,0.35); transform: translateY(-3px); }
+    .mode-emoji { font-size: 2rem; margin-bottom: 1rem; display: block; }
+    .mode-name { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .mode-desc { font-size: 0.88rem; color: var(--muted); line-height: 1.6; }
+    .mode-tag {
+      display: inline-block;
+      margin-top: 1rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: 4px;
+      padding: 0.2em 0.6em;
+    }
+
+    /* HOW IT WORKS */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0;
+      position: relative;
+    }
+    .step {
+      padding: 0 2rem 2rem 0;
+      position: relative;
+    }
+    .step-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1px solid rgba(110,231,183,0.3);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    .step-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .step-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+    /* PRIVACY */
+    #privacy { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .privacy-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+    .privacy-list { list-style: none; display: flex; flex-direction: column; gap: 1.1rem; }
+    .privacy-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.8rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .privacy-list li::before {
+      content: "✓";
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.05rem;
+    }
+    .privacy-callout {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem;
+    }
+    .privacy-callout-icon { font-size: 2.5rem; margin-bottom: 1rem; display: block; }
+    .privacy-callout h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.6rem; }
+    .privacy-callout p { font-size: 0.88rem; color: var(--muted); line-height: 1.7; }
+
+    /* ACCESSIBILITY */
+    .a11y-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.2rem;
+    }
+    .a11y-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.6rem;
+    }
+    .a11y-icon { font-size: 1.6rem; margin-bottom: 0.8rem; display: block; }
+    .a11y-title { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .a11y-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      padding: 7rem 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-section::before {
+      content: "";
+      position: absolute;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(110,231,183,0.06) 0%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .cta-section h2 {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+      background: linear-gradient(160deg, #fff 40%, #6ee7b7 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .cta-section p { color: var(--muted); font-size: 1.05rem; margin-bottom: 2.5rem; }
+
+    /* FOOTER */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2.5rem 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-logo { font-size: 0.95rem; font-weight: 700; color: var(--muted); }
+    .footer-logo span { color: var(--accent); }
+    .footer-note { font-size: 0.8rem; color: #444; }
+
+    @media (max-width: 700px) {
+      nav { padding: 1rem 1.2rem; }
+      nav ul { gap: 1.2rem; }
+      .privacy-grid { grid-template-columns: 1fr; }
+      footer { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">brain<span>.</span></div>
+  <ul>
+    <li><a href="#modes">Modes</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#privacy">Privacy</a></li>
+    <li><a href="#a11y">Accessibility</a></li>
+    <li><a href="readme.html" class="nav-cta">Docs</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">For Meta Ray-Ban Smart Glasses</div>
+  <h1>Read the world.</h1>
+  <p class="hero-sub">Brain captures text from your environment and delivers personalized audio — powered by Claude, built for visual impairment, dyslexia, ADHD, and language learners.</p>
+  <div class="hero-actions">
+    <a href="readme.html" class="btn-primary">Get started →</a>
+    <a href="#modes" class="btn-secondary">See how it works</a>
+  </div>
+
+  <div class="glasses-wrap">
+    <div class="glasses-box">
+      <div class="pulse-dot"></div>
+      <div class="glasses-icon">🕶️</div>
+      <div>
+        <div class="glasses-label">Live capture</div>
+        <div class="glasses-title">Point. Capture. Listen.</div>
+        <div class="glasses-desc">OCR runs on-device. No images leave your glasses. Only extracted text reaches the backend.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MODES -->
+<section id="modes">
+  <div class="section-inner">
+    <div class="section-label">Four modes</div>
+    <h2 class="section-title">Built for how you read.</h2>
+    <p class="section-sub">Each mode is a distinct intent — choose before you capture and Brain tailors the entire output to match.</p>
+    <div class="modes-grid">
+      <div class="mode-card">
+        <span class="mode-emoji">📖</span>
+        <div class="mode-name">Read</div>
+        <div class="mode-desc">Cleans OCR noise and reads aloud with natural pacing. Great for signs, menus, labels, and printed text.</div>
+        <span class="mode-tag">Audio + Screen</span>
+      </div>
+      <div class="mode-card">
+        <span class="mode-emoji">✨</span>
+        <div class="mode-name">Simplify</div>
+        <div class="mode-desc">Rewrites at your chosen reading level (1–5). Dense paragraphs become clear sentences.</div>
+        <span class="mode-tag">Dyslexia · ADHD</span>
+      </div>
+      <div class="mode-card">
+        <span class="mode-emoji">🌐</span>
+        <div class="mode-name">Translate</div>
+        <div class="mode-desc">Translates captured text to your target language in real time. Navigate the world in any language.</div>
+        <span class="mode-tag">Language Learners</span>
+      </div>
+      <div class="mode-card">
+        <span class="mode-emoji">🔍</span>
+        <div class="mode-name">Define</div>
+        <div class="mode-desc">Tap any word on screen to get a plain-English definition and a contextual example sentence.</div>
+        <span class="mode-tag">Word-tap Support</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <div class="section-inner">
+    <div class="section-label">How it works</div>
+    <h2 class="section-title">From lens to ears<br/>in seconds.</h2>
+    <p class="section-sub">A six-step pipeline designed to be fast, private, and accessible by default.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-title">Select a mode</div>
+        <div class="step-desc">Choose Read, Simplify, Translate, or Define before you capture.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-title">Camera captures</div>
+        <div class="step-desc">Your Ray-Ban glasses frame the text. Tap to trigger.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-title">On-device OCR</div>
+        <div class="step-desc">Apple Vision or ML Kit extracts text locally. No image leaves the device.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-title">Text sent to backend</div>
+        <div class="step-desc">Only the extracted string travels to the Brain FastAPI server.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-title">Claude processes</div>
+        <div class="step-desc">The backend streams a response from Claude tailored to your mode and profile.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-title">Heard aloud</div>
+        <div class="step-desc">On-device TTS reads the result. Offline fallback serves cached outputs.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRIVACY -->
+<section id="privacy">
+  <div class="section-inner">
+    <div class="privacy-grid">
+      <div>
+        <div class="section-label">Privacy first</div>
+        <h2 class="section-title">Your camera. Your device. Your data.</h2>
+        <p class="section-sub">Brain was designed so that raw images never travel anywhere — ever.</p>
+        <ul class="privacy-list">
+          <li>OCR runs entirely on-device using Apple Vision (iOS) or ML Kit (Android)</li>
+          <li>Raw images are never transmitted to any server</li>
+          <li>Only the extracted text string reaches the backend</li>
+          <li>Session history is stored in on-device SQLite only — never synced unless you opt in</li>
+          <li>No analytics, no tracking, no ad identifiers</li>
+        </ul>
+      </div>
+      <div class="privacy-callout">
+        <span class="privacy-callout-icon">🔒</span>
+        <h3>Offline fallback included</h3>
+        <p>The last 10 session outputs are cached in SQLite. If the backend is unreachable, Brain displays cached processed text rather than failing silently — so you're never left without an answer.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ACCESSIBILITY -->
+<section id="a11y">
+  <div class="section-inner">
+    <div class="section-label">Accessibility</div>
+    <h2 class="section-title">Designed for everyone.</h2>
+    <p class="section-sub">Accessibility isn't a feature layer — it's how Brain was built from the start.</p>
+    <div class="a11y-grid">
+      <div class="a11y-card">
+        <span class="a11y-icon">🎙️</span>
+        <div class="a11y-title">VoiceOver support</div>
+        <div class="a11y-desc">Every interactive element has <code style="font-size:0.8em;color:#aaa;">accessibilityLabel</code> and <code style="font-size:0.8em;color:#aaa;">accessibilityRole</code> — fully compatible with VoiceOver.</div>
+      </div>
+      <div class="a11y-card">
+        <span class="a11y-icon">🖊️</span>
+        <div class="a11y-title">OpenDyslexic font</div>
+        <div class="a11y-desc">Toggle the OpenDyslexic typeface in onboarding or profile settings at any time.</div>
+      </div>
+      <div class="a11y-card">
+        <span class="a11y-icon">🔤</span>
+        <div class="a11y-title">Adjustable font size</div>
+        <div class="a11y-desc">Scale output text from 12pt to 36pt on the Output screen — your choice, saved to your profile.</div>
+      </div>
+      <div class="a11y-card">
+        <span class="a11y-icon">👆</span>
+        <div class="a11y-title">44pt tap targets</div>
+        <div class="a11y-desc">All controls meet Apple's minimum touch-target guidelines for motor accessibility.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-inner">
+    <h2>Start reading the world.</h2>
+    <p>Open source. Privacy-first. Built for the people who need it most.</p>
+    <div class="hero-actions">
+      <a href="readme.html" class="btn-primary">Read the docs →</a>
+      <a href="#modes" class="btn-secondary">Explore modes</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">brain<span>.</span></div>
+  <div class="footer-note">Powered by Claude · Built with Expo + FastAPI · On-device OCR</div>
+</footer>
+
+</body>
+</html>
