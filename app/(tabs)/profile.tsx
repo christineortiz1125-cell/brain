@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { COLORS, SPACING, FONT_SIZES, READING_LEVELS, SUPPORTED_LANGUAGES, type LanguageCode } from '@/constants';
 import { useReadingProfile } from '@/hooks/useReadingProfile';
-import { getProfileStats } from '@/lib/db';
+import { getProfileStats, getWordLookups, type WordLookup } from '@/lib/db';
 
 interface Stats {
   totalSessions: number;
@@ -24,12 +24,12 @@ interface Stats {
 export default function ProfileScreen() {
   const { profile, update } = useReadingProfile();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [wordLookups, setWordLookups] = useState<WordLookup[]>([]);
   const [showLangModal, setShowLangModal] = useState(false);
 
   useEffect(() => {
-    getProfileStats()
-      .then(setStats)
-      .catch(console.error);
+    getProfileStats().then(setStats).catch(console.error);
+    getWordLookups(20).then(setWordLookups).catch(console.error);
   }, []);
 
   const currentLevel = READING_LEVELS.find((l) => l.value === profile.readingLevel);
@@ -179,6 +179,20 @@ export default function ProfileScreen() {
             />
           </View>
         </View>
+
+        {wordLookups.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recent word lookups</Text>
+            {wordLookups.map((lookup) => (
+              <View key={lookup.id} style={styles.lookupCard}>
+                <Text style={styles.lookupWord}>{lookup.word}</Text>
+                <Text style={styles.lookupDef} numberOfLines={2}>
+                  {lookup.definition.split('\n')[0]}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.privacyNote}>
           <Text style={styles.privacyIcon}>🔒</Text>
@@ -427,6 +441,26 @@ const styles = StyleSheet.create({
   chevron: {
     color: COLORS.textMuted,
     fontSize: 22,
+  },
+  lookupCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 4,
+  },
+  lookupWord: {
+    color: COLORS.text,
+    fontSize: FONT_SIZES.md,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  lookupDef: {
+    color: COLORS.textMuted,
+    fontSize: FONT_SIZES.sm,
+    lineHeight: 20,
   },
   privacyNote: {
     flexDirection: 'row',

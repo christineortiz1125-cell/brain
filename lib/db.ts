@@ -186,6 +186,15 @@ export async function saveWordLookup(word: string, definition: string): Promise<
   );
 }
 
+export async function getCachedOutput(mode: string, inputText: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ output_text: string }>(
+    'SELECT output_text FROM session_log WHERE mode = ? AND input_text = ? ORDER BY created_at DESC LIMIT 1',
+    [mode, inputText]
+  );
+  return row?.output_text ?? null;
+}
+
 export async function getWordLookups(limit = 50): Promise<WordLookup[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<{

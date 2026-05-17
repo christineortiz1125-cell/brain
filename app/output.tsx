@@ -25,7 +25,7 @@ import {
 import { useAppStore } from '@/store';
 import { useTTS } from '@/hooks/useTTS';
 import { streamClaudeResponse } from '@/lib/claude';
-import { saveSession, saveWordLookup } from '@/lib/db';
+import { saveSession, saveWordLookup, getCachedOutput } from '@/lib/db';
 
 export default function OutputScreen() {
   const router = useRouter();
@@ -54,6 +54,8 @@ export default function OutputScreen() {
   const activeLanguageRef = useRef(activeLanguage);
   const [showLangPicker, setShowLangPicker] = useState(false);
 
+  const [isCached, setIsCached] = useState(false);
+
   // Define word modal
   const [defineWord, setDefineWord] = useState<string | null>(null);
   const [defineResult, setDefineResult] = useState<string>('');
@@ -70,6 +72,7 @@ export default function OutputScreen() {
 
       setIsProcessing(true);
       setProcessedText('');
+      setIsCached(false);
 
       const level = levelOverride ?? activeLevelRef.current;
       const language = languageOverride ?? activeLanguageRef.current;
@@ -96,9 +99,14 @@ export default function OutputScreen() {
             wordCount,
           }).catch(console.error);
         },
-        onError: (err) => {
+        onError: async (err) => {
           setIsProcessing(false);
-          if (err.name !== 'AbortError') {
+          if (err.name === 'AbortError') return;
+          const cached = await getCachedOutput(activeMode, capturedText).catch(() => null);
+          if (cached) {
+            setProcessedText(cached);
+            setIsCached(true);
+          } else {
             Alert.alert('Processing error', err.message);
           }
         },
@@ -262,6 +270,15 @@ export default function OutputScreen() {
             <Text style={styles.langTriggerNative}>{currentLang?.nativeLabel}</Text>
             <Text style={styles.langChevron}>›</Text>
           </Pressable>
+        </View>
+      )}
+
+      {isCached && (
+        <View style={styles.cacheBanner} accessibilityLiveRegion="polite">
+          <Text style={styles.cacheBannerIcon}>📦</Text>
+          <Text style={styles.cacheBannerText}>
+            Backend unreachable — showing cached result
+          </Text>
         </View>
       )}
 
@@ -477,6 +494,18 @@ const styles = StyleSheet.create({
   langTriggerText: { color: COLORS.text, fontSize: FONT_SIZES.md, fontWeight: '700' },
   langTriggerNative: { color: COLORS.textMuted, fontSize: FONT_SIZES.sm, flex: 1 },
   langChevron: { color: COLORS.textMuted, fontSize: 20 },
+  cacheBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    backgroundColor: COLORS.surfaceAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 10,
+  },
+  cacheBannerIcon: { fontSize: 14 },
+  cacheBannerText: { color: COLORS.textMuted, fontSize: FONT_SIZES.xs, flex: 1 },
   loadingContainer: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.sm },
   loadingText: { color: COLORS.textMuted, fontSize: FONT_SIZES.md },
   footer: {
