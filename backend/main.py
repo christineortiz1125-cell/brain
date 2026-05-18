@@ -1,9 +1,10 @@
 import os
 import json
+import base64
 from typing import AsyncIterator
 
 import anthropic
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -68,6 +69,50 @@ class TranslateRequest(BaseModel):
 
 class DefineRequest(BaseModel):
     word: str = Field(..., min_length=1, max_length=100)
+
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+
+
+@app.post("/api/ocr")
+async def extract_text(file: UploadFile = File(...)):
+    """Extract text from an uploaded image using Claude vision."""
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported image type. Use JPEG, PNG, GIF, or WebP.")
+
+    image_data = await file.read()
+    if len(image_data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large. Maximum size is 5 MB.")
+
+    encoded = base64.standard_b64encode(image_data).decode("utf-8")
+    media_type = file.content_type
+
+    message = await client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": encoded},
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            "Extract all visible text from this image exactly as it appears. "
+                            "Preserve line breaks where they are meaningful. "
+                            "Return only the extracted text — no commentary, no markdown."
+                        ),
+                    },
+                ],
+            }
+        ],
+    )
+
+    text = message.content[0].text.strip() if message.content else ""
+    return {"text": text}
 
 
 @app.get("/health")

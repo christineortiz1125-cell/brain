@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brain — Web App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080808;
+      --surface: #111111;
+      --surface-alt: #1a1a1a;
+      --border: #222222;
+      --border-hi: #333333;
+      --accent: #6ee7b7;
+      --accent-dim: rgba(110,231,183,0.12);
+      --primary: #7c6fff;
+      --primary-dim: rgba(124,111,255,0.15);
+      --warn: #ff7043;
+      --text: #f0f0f0;
+      --muted: #888;
+      --dim: #444;
+      --radius: 14px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── NAV ── */
+    nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(8,8,8,0.9);
+      backdrop-filter: blur(10px);
+      position: sticky; top: 0; z-index: 50;
+    }
+    .nav-logo { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.03em; }
+    .nav-logo span { color: var(--accent); }
+    .nav-tag {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--accent);
+      background: var(--accent-dim); border: 1px solid rgba(110,231,183,0.2);
+      padding: 0.3rem 0.7rem; border-radius: 100px;
+    }
+
+    /* ── LAYOUT ── */
+    .app { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+
+    /* ── STEP HEADER ── */
+    .step-header {
+      display: flex; align-items: center; gap: 0.8rem;
+      margin-bottom: 1.2rem;
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent-dim); border: 1px solid rgba(110,231,183,0.25);
+      color: var(--accent); font-size: 0.8rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-num.done { background: var(--accent); color: #000; border-color: var(--accent); }
+    .step-title { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .step-sub { font-size: 0.8rem; color: var(--muted); margin-top: 1px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 1.2rem;
+    }
+
+    /* ── UPLOAD ZONE ── */
+    .upload-zone {
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      position: relative;
+      margin-bottom: 1.2rem;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-icon { font-size: 2.8rem; margin-bottom: 0.8rem; display: block; }
+    .upload-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .upload-sub { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── IMAGE PREVIEW ── */
+    .preview-wrap {
+      display: none;
+      gap: 1.2rem;
+      margin-bottom: 1.2rem;
+      align-items: flex-start;
+    }
+    .preview-wrap.visible { display: flex; }
+    .preview-img-box {
+      flex-shrink: 0; width: 160px; border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .preview-img-box img { width: 100%; display: block; }
+    .preview-info { flex: 1; }
+    .preview-filename { font-size: 0.85rem; font-weight: 700; margin-bottom: 0.3rem; word-break: break-all; }
+    .preview-size { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.8rem; }
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border-hi);
+      color: var(--muted);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── OCR RESULT ── */
+    .ocr-box {
+      display: none;
+      padding: 1.2rem;
+      border-top: 1px solid var(--border);
+    }
+    .ocr-box.visible { display: block; }
+    .ocr-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem;
+    }
+    .ocr-text {
+      color: var(--text); font-size: 0.9rem; line-height: 1.7;
+      white-space: pre-wrap; max-height: 140px; overflow-y: auto;
+      padding-right: 4px;
+    }
+    .ocr-text::-webkit-scrollbar { width: 4px; }
+    .ocr-text::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+    /* ── MODE SELECTOR ── */
+    .modes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem; margin-bottom: 1.2rem; }
+    .mode-btn {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 0.5rem;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    }
+    .mode-btn:hover { border-color: var(--border-hi); transform: translateY(-1px); }
+    .mode-btn.active { border-color: var(--primary); background: var(--primary-dim); }
+    .mode-emoji { font-size: 1.6rem; display: block; margin-bottom: 0.4rem; }
+    .mode-name { font-size: 0.82rem; font-weight: 700; display: block; }
+    .mode-desc { font-size: 0.7rem; color: var(--muted); display: block; margin-top: 0.2rem; line-height: 1.4; }
+    .mode-btn.active .mode-desc { color: rgba(124,111,255,0.7); }
+
+    /* ── MODE OPTIONS ── */
+    .mode-options { display: none; margin-bottom: 1.2rem; }
+    .mode-options.visible { display: block; }
+    .option-label {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem;
+    }
+    .level-pills { display: flex; gap: 0.5rem; }
+    .level-pill {
+      flex: 1; padding: 0.6rem 0.3rem; text-align: center;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .level-pill:hover { border-color: var(--border-hi); }
+    .level-pill.active { background: var(--accent-dim); border-color: var(--accent); }
+    .level-pill-num { font-size: 1rem; font-weight: 800; color: var(--muted); display: block; }
+    .level-pill.active .level-pill-num { color: var(--accent); }
+    .level-pill-name { font-size: 0.62rem; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .level-pill.active .level-pill-name { color: var(--accent); opacity: 0.8; }
+
+    .lang-select {
+      width: 100%; background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 0.7rem 1rem; border-radius: 10px;
+      font-size: 0.9rem; cursor: pointer; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 12px center;
+      padding-right: 2.5rem;
+    }
+    .lang-select:focus { outline: none; border-color: var(--accent); }
+
+    /* ── PROCESS BUTTON ── */
+    .btn-process {
+      width: 100%;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 1rem;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-bottom: 1.2rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    }
+    .btn-process:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-process:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── OUTPUT ── */
+    .output-card { display: none; margin-bottom: 1.2rem; }
+    .output-card.visible { display: block; }
+    .output-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.9rem 1.2rem;
+      border-bottom: 1px solid var(--border);
+      gap: 0.8rem;
+    }
+    .output-mode-pill {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.82rem; font-weight: 700;
+      padding: 0.3rem 0.8rem; border-radius: 100px;
+    }
+    .output-status {
+      display: flex; align-items: center; gap: 0.4rem;
+      font-size: 0.75rem; color: var(--accent); font-weight: 600;
+    }
+    .spinner {
+      width: 12px; height: 12px; border: 2px solid var(--accent-dim);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .output-body {
+      padding: 1.4rem;
+      font-size: 1rem; line-height: 1.8; color: var(--text);
+      min-height: 80px; white-space: pre-wrap;
+    }
+    .cursor {
+      display: inline-block; width: 2px; height: 1.1em;
+      background: var(--accent); vertical-align: text-bottom;
+      animation: blink 1s step-end infinite; margin-left: 1px;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* ── DEFINE: clickable words ── */
+    .word-tap { cursor: pointer; border-bottom: 1px dotted rgba(124,111,255,0.5); }
+    .word-tap:hover { border-bottom-color: var(--primary); color: var(--primary); }
+
+    /* ── DEFINITION PANEL ── */
+    .define-panel {
+      display: none; margin: 0 1.4rem 1.4rem;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+    }
+    .define-panel.visible { display: block; }
+    .define-word { font-size: 1.1rem; font-weight: 800; margin-bottom: 0.5rem; text-transform: capitalize; }
+    .define-result { font-size: 0.88rem; line-height: 1.7; color: var(--muted); white-space: pre-wrap; }
+    .define-loading { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); font-size: 0.85rem; }
+
+    /* ── AUDIO CONTROLS ── */
+    .audio-bar {
+      display: none; align-items: center; gap: 0.7rem;
+      padding: 0.9rem 1.2rem;
+      border-top: 1px solid var(--border);
+    }
+    .audio-bar.visible { display: flex; }
+    .btn-audio {
+      display: flex; align-items: center; gap: 0.5rem;
+      background: var(--primary); color: #fff;
+      border: none; border-radius: 10px;
+      padding: 0.6rem 1.2rem; font-size: 0.875rem; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    .btn-audio:hover { opacity: 0.85; }
+    .btn-audio.secondary {
+      background: var(--surface-alt); color: var(--text);
+      border: 1px solid var(--border-hi);
+    }
+    .btn-audio:disabled { opacity: 0.35; cursor: not-allowed; }
+    .audio-note { font-size: 0.75rem; color: var(--dim); margin-left: auto; }
+
+    /* ── CACHE BANNER ── */
+    .cache-banner {
+      display: none; align-items: center; gap: 0.5rem;
+      background: var(--surface-alt); border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.2rem; font-size: 0.78rem; color: var(--muted);
+    }
+    .cache-banner.visible { display: flex; }
+
+    /* ── ERROR ── */
+    .error-box {
+      display: none;
+      background: rgba(255,112,67,0.1); border: 1px solid rgba(255,112,67,0.3);
+      border-radius: 10px; padding: 0.9rem 1.2rem;
+      color: var(--warn); font-size: 0.875rem;
+      margin-bottom: 1.2rem;
+    }
+    .error-box.visible { display: block; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .modes { grid-template-columns: repeat(2, 1fr); }
+      .preview-wrap { flex-direction: column; }
+      .preview-img-box { width: 100%; }
+      nav { padding: 0.8rem 1rem; }
+      .app { padding: 1.5rem 1rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">brain<span>.</span></div>
+  <div class="nav-tag">Web App</div>
+</nav>
+
+<div class="app">
+
+  <!-- STEP 1: Upload -->
+  <div class="step-header">
+    <div class="step-num" id="step1-num">1</div>
+    <div>
+      <div class="step-title">Upload a photo</div>
+      <div class="step-sub">JPEG, PNG, or WebP · max 5 MB</div>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" />
+    <span class="upload-icon">📷</span>
+    <div class="upload-title">Drop a photo here or click to browse</div>
+    <div class="upload-sub">Menus, signs, labels, books, documents — anything with text</div>
+  </div>
+
+  <div class="preview-wrap" id="previewWrap">
+    <div class="preview-img-box">
+      <img id="previewImg" src="" alt="Uploaded photo" />
+    </div>
+    <div class="preview-info">
+      <div class="preview-filename" id="previewName"></div>
+      <div class="preview-size" id="previewSize"></div>
+      <button class="btn-ghost" onclick="resetUpload()">↩ Use a different photo</button>
+    </div>
+  </div>
+
+  <div class="card" id="ocrCard" style="display:none;">
+    <div class="ocr-box visible">
+      <div class="ocr-label">Extracted text</div>
+      <div class="ocr-text" id="ocrText"></div>
+    </div>
+  </div>
+
+  <div class="error-box" id="ocrError"></div>
+
+  <!-- STEP 2: Mode -->
+  <div class="step-header" id="step2Header" style="opacity:0.35;">
+    <div class="step-num" id="step2-num">2</div>
+    <div>
+      <div class="step-title">Choose a mode</div>
+      <div class="step-sub">How should Brain process this text?</div>
+    </div>
+  </div>
+
+  <div id="step2Body" style="opacity:0.35; pointer-events:none;">
+    <div class="modes">
+      <button class="mode-btn active" data-mode="read" onclick="selectMode('read')">
+        <span class="mode-emoji">👓</span>
+        <span class="mode-name">Read</span>
+        <span class="mode-desc">Clean up and read aloud</span>
+      </button>
+      <button class="mode-btn" data-mode="simplify" onclick="selectMode('simplify')">
+        <span class="mode-emoji">✨</span>
+        <span class="mode-name">Simplify</span>
+        <span class="mode-desc">Rewrite at your reading level</span>
+      </button>
+      <button class="mode-btn" data-mode="translate" onclick="selectMode('translate')">
+        <span class="mode-emoji">🌐</span>
+        <span class="mode-name">Translate</span>
+        <span class="mode-desc">Convert to your language</span>
+      </button>
+      <button class="mode-btn" data-mode="define" onclick="selectMode('define')">
+        <span class="mode-emoji">🔍</span>
+        <span class="mode-name">Define</span>
+        <span class="mode-desc">Tap any word to define it</span>
+      </button>
+    </div>
+
+    <!-- Simplify options -->
+    <div class="mode-options" id="simplifyOptions">
+      <div class="option-label">Reading level</div>
+      <div class="level-pills">
+        <div class="level-pill" data-level="1" onclick="selectLevel(1)">
+          <span class="level-pill-num">1</span>
+          <span class="level-pill-name">Elementary</span>
+        </div>
+        <div class="level-pill" data-level="2" onclick="selectLevel(2)">
+          <span class="level-pill-num">2</span>
+          <span class="level-pill-name">Middle</span>
+        </div>
+        <div class="level-pill active" data-level="3" onclick="selectLevel(3)">
+          <span class="level-pill-num">3</span>
+          <span class="level-pill-name">High School</span>
+        </div>
+        <div class="level-pill" data-level="4" onclick="selectLevel(4)">
+          <span class="level-pill-num">4</span>
+          <span class="level-pill-name">College</span>
+        </div>
+        <div class="level-pill" data-level="5" onclick="selectLevel(5)">
+          <span class="level-pill-num">5</span>
+          <span class="level-pill-name">Professional</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Translate options -->
+    <div class="mode-options" id="translateOptions">
+      <div class="option-label">Translate to</div>
+      <select class="lang-select" id="langSelect">
+        <option value="en">English</option>
+        <option value="es">Spanish — Español</option>
+        <option value="fr">French — Français</option>
+        <option value="pt">Portuguese — Português</option>
+        <option value="zh">Chinese — 中文</option>
+        <option value="ar">Arabic — العربية</option>
+        <option value="hi">Hindi — हिन्दी</option>
+        <option value="ko">Korean — 한국어</option>
+        <option value="ja">Japanese — 日本語</option>
+        <option value="de">German — Deutsch</option>
+      </select>
+    </div>
+
+    <button class="btn-process" id="processBtn" disabled onclick="processText()">
+      <span id="processBtnIcon">✦</span>
+      <span id="processBtnLabel">Process with Claude</span>
+    </button>
+  </div>
+
+  <!-- STEP 3: Output -->
+  <div class="step-header" id="step3Header" style="opacity:0.35;">
+    <div class="step-num" id="step3-num">3</div>
+    <div>
+      <div class="step-title">Result</div>
+      <div class="step-sub">Streaming output from Claude</div>
+    </div>
+  </div>
+
+  <div class="card output-card" id="outputCard">
+    <div class="cache-banner" id="cacheBanner">
+      <span>📦</span> Backend unreachable — showing cached result
+    </div>
+    <div class="output-header">
+      <div class="output-mode-pill" id="outputModePill"></div>
+      <div class="output-status" id="outputStatus" style="display:none;">
+        <div class="spinner"></div>
+        <span id="outputStatusText">Processing…</span>
+      </div>
+    </div>
+    <div class="output-body" id="outputBody"></div>
+    <div class="define-panel" id="definePanel">
+      <div class="define-word" id="defineWord"></div>
+      <div id="defineContent"></div>
+    </div>
+    <div class="audio-bar" id="audioBar">
+      <button class="btn-audio" id="btnPlay" onclick="togglePlay()">▶ Read aloud</button>
+      <button class="btn-audio secondary" id="btnReplay" onclick="replayAudio()" disabled>↺</button>
+      <span class="audio-note">Uses your device's text-to-speech</span>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<script>
+  // ── CONFIG ──────────────────────────────────────────────────────────────
+  const BACKEND = 'http://localhost:8000';
+
+  // ── STATE ────────────────────────────────────────────────────────────────
+  let currentMode = 'read';
+  let currentLevel = 3;
+  let extractedText = '';
+  let outputText = '';
+  let isSpeaking = false;
+  let utterance = null;
+  let abortController = null;
+
+  // ── UPLOAD ───────────────────────────────────────────────────────────────
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  async function handleFile(file) {
+    if (!file.type.startsWith('image/')) {
+      showOcrError('Please upload an image file (JPEG, PNG, or WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showOcrError('Image is too large. Please use a file under 5 MB.');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('previewImg').src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    document.getElementById('previewName').textContent = file.name;
+    document.getElementById('previewSize').textContent = formatBytes(file.size);
+    uploadZone.style.display = 'none';
+    document.getElementById('previewWrap').classList.add('visible');
+    document.getElementById('step1-num').classList.add('done');
+    document.getElementById('step1-num').textContent = '✓';
+
+    // Run OCR
+    hideOcrError();
+    document.getElementById('ocrCard').style.display = 'none';
+    setStep2Active(false);
+
+    const processBtn = document.getElementById('processBtn');
+    processBtn.disabled = true;
+    document.getElementById('processBtnLabel').textContent = 'Extracting text…';
+    document.getElementById('processBtnIcon').textContent = '⏳';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${BACKEND}/api/ocr`, { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `OCR failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (!data.text || data.text.trim().length === 0) {
+        throw new Error('No text found in this image. Try a clearer photo or one with visible text.');
+      }
+      extractedText = data.text.trim();
+      document.getElementById('ocrText').textContent = extractedText;
+      document.getElementById('ocrCard').style.display = 'block';
+      setStep2Active(true);
+      processBtn.disabled = false;
+      document.getElementById('processBtnLabel').textContent = 'Process with Claude';
+      document.getElementById('processBtnIcon').textContent = '✦';
+    } catch (e) {
+      showOcrError(e.message);
+      processBtn.disabled = true;
+      document.getElementById('processBtnLabel').textContent = 'Process with Claude';
+      document.getElementById('processBtnIcon').textContent = '✦';
+      resetUploadState();
+    }
+  }
+
+  function resetUpload() {
+    uploadZone.style.display = '';
+    document.getElementById('previewWrap').classList.remove('visible');
+    document.getElementById('ocrCard').style.display = 'none';
+    document.getElementById('step1-num').classList.remove('done');
+    document.getElementById('step1-num').textContent = '1';
+    fileInput.value = '';
+    extractedText = '';
+    hideOcrError();
+    setStep2Active(false);
+    document.getElementById('processBtn').disabled = true;
+    hideOutput();
+  }
+
+  function resetUploadState() {
+    uploadZone.style.display = '';
+    document.getElementById('previewWrap').classList.remove('visible');
+    document.getElementById('step1-num').classList.remove('done');
+    document.getElementById('step1-num').textContent = '1';
+    fileInput.value = '';
+  }
+
+  // ── MODE ─────────────────────────────────────────────────────────────────
+  function selectMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-mode="${mode}"]`).classList.add('active');
+    document.getElementById('simplifyOptions').classList.toggle('visible', mode === 'simplify');
+    document.getElementById('translateOptions').classList.toggle('visible', mode === 'translate');
+  }
+
+  function selectLevel(level) {
+    currentLevel = level;
+    document.querySelectorAll('.level-pill').forEach(p => p.classList.remove('active'));
+    document.querySelector(`[data-level="${level}"]`).classList.add('active');
+  }
+
+  function setStep2Active(active) {
+    const header = document.getElementById('step2Header');
+    const body = document.getElementById('step2Body');
+    header.style.opacity = active ? '1' : '0.35';
+    body.style.opacity = active ? '1' : '0.35';
+    body.style.pointerEvents = active ? '' : 'none';
+    if (active) document.getElementById('step2-num').textContent = '2';
+  }
+
+  // ── PROCESS ──────────────────────────────────────────────────────────────
+  const MODE_META = {
+    read:      { label: 'Read',      emoji: '👓', color: '#6C63FF' },
+    simplify:  { label: 'Simplify',  emoji: '✨', color: '#00D4AA' },
+    translate: { label: 'Translate', emoji: '🌐', color: '#FF7043' },
+    define:    { label: 'Define',    emoji: '🔍', color: '#FFB300' },
+  };
+
+  async function processText() {
+    if (!extractedText) return;
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    stopAudio();
+    outputText = '';
+    showOutput();
+    setStreaming(true);
+    document.getElementById('definePanel').classList.remove('visible');
+    document.getElementById('cacheBanner').classList.remove('visible');
+
+    const mode = currentMode;
+    const meta = MODE_META[mode];
+
+    document.getElementById('outputModePill').innerHTML =
+      `<span>${meta.emoji}</span><span style="color:${meta.color};font-weight:700;font-size:0.82rem;">${meta.label}</span>`;
+
+    const statusText = mode === 'simplify'
+      ? `Simplifying at Level ${currentLevel}…`
+      : mode === 'translate'
+      ? `Translating to ${document.getElementById('langSelect').options[document.getElementById('langSelect').selectedIndex].text.split(' —')[0]}…`
+      : mode === 'read' ? 'Cleaning text…' : 'Processing…';
+
+    document.getElementById('outputStatusText').textContent = statusText;
+
+    let endpoint, body;
+    switch (mode) {
+      case 'read':
+        endpoint = '/api/read';
+        body = { text: extractedText };
+        break;
+      case 'simplify':
+        endpoint = '/api/simplify';
+        body = { text: extractedText, reading_level: currentLevel };
+        break;
+      case 'translate':
+        endpoint = '/api/translate';
+        body = { text: extractedText, target_language: document.getElementById('langSelect').value };
+        break;
+      case 'define':
+        endpoint = '/api/read';
+        body = { text: extractedText };
+        break;
+    }
+
+    try {
+      const res = await fetch(`${BACKEND}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: abortController.signal,
+      });
+
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const outputEl = document.getElementById('outputBody');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) {
+              outputText += parsed.text;
+              if (mode === 'define') {
+                outputEl.innerHTML = renderTappableWords(outputText) + '<span class="cursor"></span>';
+              } else {
+                outputEl.textContent = outputText;
+                outputEl.appendChild(makeCursor());
+              }
+            }
+          } catch {}
+        }
+      }
+
+      // Done streaming
+      setStreaming(false);
+      if (mode === 'define') {
+        outputEl.innerHTML = renderTappableWords(outputText);
+      } else {
+        outputEl.textContent = outputText;
+      }
+
+      // Auto-play TTS for read and simplify
+      if (mode === 'read' || mode === 'simplify') {
+        setTimeout(() => startAudio(outputText), 300);
+      }
+
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      setStreaming(false);
+      document.getElementById('outputBody').textContent = outputText || '';
+      // Show a subtle error note
+      const note = document.createElement('div');
+      note.style.cssText = 'color:var(--warn);font-size:0.8rem;margin-top:0.5rem;';
+      note.textContent = '⚠ ' + e.message;
+      document.getElementById('outputBody').appendChild(note);
+    }
+  }
+
+  // ── DEFINE: word tap ─────────────────────────────────────────────────────
+  function renderTappableWords(text) {
+    return text.split(/(\s+)/).map(seg => {
+      if (/^\s+$/.test(seg)) return seg;
+      const word = seg.replace(/[^a-zA-Z'-]/g, '');
+      if (!word) return seg;
+      return `<span class="word-tap" onclick="lookupWord('${word.replace(/'/g,"\\'")}')">` + escapeHtml(seg) + `</span>`;
+    }).join('');
+  }
+
+  async function lookupWord(word) {
+    const panel = document.getElementById('definePanel');
+    const wordEl = document.getElementById('defineWord');
+    const contentEl = document.getElementById('defineContent');
+
+    wordEl.textContent = word;
+    contentEl.innerHTML = '<div class="define-loading"><div class="spinner"></div> Looking up…</div>';
+    panel.classList.add('visible');
+
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+
+    let def = '';
+    try {
+      const res = await fetch(`${BACKEND}/api/define`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word }),
+        signal: abortController.signal,
+      });
+      if (!res.ok) throw new Error(`Error ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      contentEl.innerHTML = '<div class="define-result"></div>';
+      const defEl = contentEl.querySelector('.define-result');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.text) { def += parsed.text; defEl.textContent = def; }
+          } catch {}
+        }
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        contentEl.innerHTML = `<div class="define-result" style="color:var(--warn);">Could not load definition.</div>`;
+      }
+    }
+  }
+
+  // ── TTS ──────────────────────────────────────────────────────────────────
+  function startAudio(text) {
+    if (!window.speechSynthesis) return;
+    stopAudio();
+    utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 0.9;
+    utterance.onstart = () => {
+      isSpeaking = true;
+      document.getElementById('btnPlay').textContent = '⏹ Stop';
+      document.getElementById('btnReplay').disabled = false;
+    };
+    utterance.onend = utterance.onerror = () => {
+      isSpeaking = false;
+      document.getElementById('btnPlay').textContent = '▶ Read aloud';
+    };
+    speechSynthesis.speak(utterance);
+  }
+
+  function stopAudio() {
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    isSpeaking = false;
+    const btn = document.getElementById('btnPlay');
+    if (btn) btn.textContent = '▶ Read aloud';
+  }
+
+  function togglePlay() {
+    if (isSpeaking) { stopAudio(); } else { startAudio(outputText); }
+  }
+
+  function replayAudio() { stopAudio(); setTimeout(() => startAudio(outputText), 100); }
+
+  // ── OUTPUT UI helpers ─────────────────────────────────────────────────────
+  function showOutput() {
+    const card = document.getElementById('outputCard');
+    card.classList.add('visible');
+    document.getElementById('step3Header').style.opacity = '1';
+    document.getElementById('audioBar').classList.add('visible');
+    document.getElementById('step3-num').textContent = '✓';
+    document.getElementById('step3-num').classList.add('done');
+    document.getElementById('outputBody').textContent = '';
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function hideOutput() {
+    document.getElementById('outputCard').classList.remove('visible');
+    document.getElementById('step3Header').style.opacity = '0.35';
+    document.getElementById('audioBar').classList.remove('visible');
+    document.getElementById('step3-num').textContent = '3';
+    document.getElementById('step3-num').classList.remove('done');
+    stopAudio();
+  }
+
+  function setStreaming(active) {
+    const status = document.getElementById('outputStatus');
+    status.style.display = active ? 'flex' : 'none';
+    document.getElementById('processBtn').disabled = active;
+    document.getElementById('processBtnLabel').textContent = active ? 'Processing…' : 'Process with Claude';
+    document.getElementById('processBtnIcon').textContent = active ? '⏳' : '✦';
+    if (!active) {
+      const cursor = document.querySelector('.cursor');
+      if (cursor) cursor.remove();
+    }
+  }
+
+  function makeCursor() {
+    const c = document.createElement('span');
+    c.className = 'cursor';
+    return c;
+  }
+
+  function showOcrError(msg) {
+    const el = document.getElementById('ocrError');
+    el.textContent = '⚠ ' + msg;
+    el.classList.add('visible');
+  }
+
+  function hideOcrError() {
+    document.getElementById('ocrError').classList.remove('visible');
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+</script>
+</body>
+</html>
