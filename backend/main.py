@@ -1,12 +1,13 @@
 import os
 import json
 import base64
+from pathlib import Path
 from typing import AsyncIterator
 
 import anthropic
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="Brain API", version="1.0.0")
@@ -19,7 +20,7 @@ app.add_middleware(
 )
 
 client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 READING_LEVEL_DESCRIPTIONS = {
     1: "elementary school level (ages 6-10): very simple words, very short sentences, no jargon",
@@ -71,48 +72,75 @@ class DefineRequest(BaseModel):
     word: str = Field(..., min_length=1, max_length=100)
 
 
-ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MEDIA_TYPE_MAP = {
+    "image/jpeg": "image/jpeg",
+    "image/jpg": "image/jpeg",
+    "image/png": "image/png",
+    "image/gif": "image/gif",
+    "image/webp": "image/webp",
+}
 
 
 @app.post("/api/ocr")
 async def extract_text(file: UploadFile = File(...)):
     """Extract text from an uploaded image using Claude vision."""
-    if file.content_type not in ALLOWED_IMAGE_TYPES:
-        raise HTTPException(status_code=415, detail="Unsupported image type. Use JPEG, PNG, GIF, or WebP.")
+    raw_type = (file.content_type or "").split(";")[0].strip().lower()
+    media_type = MEDIA_TYPE_MAP.get(raw_type)
+
+    # Fall back to sniffing by filename extension if content-type is missing
+    if not media_type and file.filename:
+        ext = file.filename.rsplit(".", 1)[-1].lower()
+        media_type = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                      "gif": "image/gif", "webp": "image/webp"}.get(ext)
+
+    if not media_type:
+        raise HTTPException(status_code=415, detail=f"Unsupported image type '{raw_type}'. Use JPEG, PNG, or WebP.")
 
     image_data = await file.read()
     if len(image_data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Image too large. Maximum size is 5 MB.")
+    if len(image_data) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     encoded = base64.standard_b64encode(image_data).decode("utf-8")
-    media_type = file.content_type
 
-    message = await client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {"type": "base64", "media_type": media_type, "data": encoded},
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            "Extract all visible text from this image exactly as it appears. "
-                            "Preserve line breaks where they are meaningful. "
-                            "Return only the extracted text — no commentary, no markdown."
-                        ),
-                    },
-                ],
-            }
-        ],
-    )
+    try:
+        message = await client.messages.create(
+            model=MODEL,
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": media_type, "data": encoded},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "Extract all visible text from this image exactly as it appears. "
+                                "Preserve line breaks where they are meaningful. "
+                                "Return only the extracted text — no commentary, no markdown."
+                            ),
+                        },
+                    ],
+                }
+            ],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Claude API error: {e}")
 
     text = message.content[0].text.strip() if message.content else ""
     return {"text": text}
+
+
+WEB_APP = Path(__file__).parent.parent / "web-app.html"
+
+
+@app.get("/")
+async def serve_web_app():
+    return FileResponse(WEB_APP, media_type="text/html")
 
 
 @app.get("/health")
