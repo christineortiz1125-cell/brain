@@ -4,6 +4,9 @@ import base64
 from pathlib import Path
 from typing import AsyncIterator
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent / ".env")
+
 import anthropic
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
